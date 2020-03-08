@@ -1,0 +1,92 @@
+% Checks if the point is in the game field
+valid(X, Y) :- between(0, 20, X), between(0, 20, Y).
+
+% Checks if the following positions are neighbors
+neighbors((X, Y), (X, Z)) :- valid(X, Y), valid(X, Z), abs(Z - Y) =:= 1.
+neighbors((X, Y), (Z, Y)) :- valid(X, Y), valid(Z, Y), abs(Z - X) =:= 1.
+
+%Checks if the following points lay on the same line
+on_same_line(X, _, X, Y1) :- valid(X, Y1).
+on_same_line(_, Y, X1, Y) :- valid(X1, Y).
+on_same_line((X,Y),(X1,Y1),(X2,Y2)) :- on_same_line(X,Y,X1,Y1),
+									   on_same_line(X1,Y1,X2,Y2),
+									   on_same_line(X,Y,X2,Y2).
+
+% Checks if the following points lay on the same diagonal
+on_diagonal((X, Y), (X1, Y1)) :- valid(X, Y), valid(X1, Y1),
+								X + Y =:= X1 + Y1.
+on_diagonal((X, Y), (X1, Y1)) :- valid(X, Y), valid(X1, Y1),
+								X - Y =:= X1 - Y1.
+
+% Tells if the cell is empty
+empty(X, Y) :- valid(X, Y), \+o(X, Y), \+h(X, Y).
+
+% Testing positions
+h(0, 6).
+h(0, 3).
+o(2, 2).
+t(1, 6).
+
+max(A, B, A) :- A >= B.
+max(A, B, B) :- B > A.
+
+min(A, B, A) :- max(A, B, B).
+min(A, B, B) :- max(A, B, A).
+
+someone_between((X,Y),(X,Y1),(X,Ym)) :-	  min(Y, Y1, Ymin_),succ(Ymin_, Ymin),
+   										  max(Y, Y1, Ymax_),succ(Ymax, Ymax_),
+    									  between(Ymin, Ymax, Ym).
+someone_between((X,Y),(X1,Y),(Xm,Y)) :-   min(X, X1, Xmin_),succ(Xmin_, Xmin),
+   										  max(X, X1, Xmax_),succ(Xmax, Xmax_),   										  
+    									  between(Xmin, Xmax, Xm).
+someone_between((X,Y),(X1,Y1),(Xm,Ym)) :- on_diagonal((X, Y),(X1, Y1)),
+										  on_diagonal((X,Y),(Xm,Ym)),
+    									  min(Y, Y1, Ymin_),succ(Ymin_, Ymin),
+   										  max(Y, Y1, Ymax_),succ(Ymax, Ymax_),
+   										  min(X, X1, Xmin_),succ(Xmin_, Xmin),
+   										  max(X, X1, Xmax_),succ(Xmax, Xmax_),
+    									  between(Xmin, Xmax, Xm),between(Ymin, Ymax, Ym).    									  
+
+orc_between((X1, Y1),  (X2, Y2)) :- o(Xo, Yo),
+										someone_between((X1, Y1),(X2, Y2),(Xo, Yo)).
+
+human_between((X1, Y1),  (X2, Y2)) :- h(Xo, Yo),
+										someone_between((X1, Y1),(X2, Y2),(Xo, Yo)).
+
+empty_or_human(X,Y) :- empty(X,Y) ; h(X,Y).
+
+pass_available((X, Y), (X1, Y1)) :- empty_or_human(X, Y), h(X1, Y1), on_same_line(X, Y, X1, Y1), 
+									\+human_between((X, Y), (X1, Y1)),
+									\+orc_between((X, Y), (X1, Y1)).
+									
+pass_available((X, Y), (X1, Y1)) :- empty_or_human(X, Y), h(X1, Y1), on_diagonal((X, Y), (X1, Y1)),
+									\+human_between((X, Y), (X1, Y1)),
+									\+orc_between((X, Y), (X1, Y1)).
+
+
+transition((X, Y), (X, Y), 0) :- valid(X, Y).
+transition((X, Y), (X1, Y1), 1) :- empty(X, Y), empty(X1, Y1), 
+    						 neighbors((X, Y), (X1, Y1)).
+transition((X, Y), (X1, Y1), 0) :- empty(X, Y), h(X1, Y1), 
+    						 neighbors((X, Y), (X1, Y1)).
+transition((X, Y), (X1, Y1), 1) :- empty(X1, Y1), h(X, Y), 
+    						 neighbors((X, Y), (X1, Y1)).
+transition((X, Y),  (X1, Y1), 2) :-
+    						h(X1, Y1),
+    						pass_available((X, Y),  (X1, Y1)).
+
+path([(0, 0)], 0).
+path([(X, Y)|Tail], Value) :- path(Tail, Value1), valid(X, Y), \+member((X, Y), Tail), 
+    				   nth0(0, Tail,(X1, Y1)), transition((X1, Y1), (X, Y), Weight), 
+    				   Value is Value1 + Weight.
+
+backtrack_search((Current_X, Current_Y), Steps, [(Current_X, Current_Y)|Path]) :-
+    												t(Current_X, Current_Y),
+    												path([(Current_X, Current_Y)|Path], Steps).
+backtrack_search((Current_X, Current_Y), Steps, Path) :-
+    								valid(X, Y),
+    								transition((Current_X, Current_Y),  (X, Y), Weight),
+    								path(Path, Steps),
+    								\+ member((X, Y), Path),
+    								Steps1 is Steps+Weight,		
+    								backtrack_search((X, Y), Steps1, [(X, Y)|Path]).
